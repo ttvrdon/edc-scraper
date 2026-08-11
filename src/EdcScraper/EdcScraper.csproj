@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>EdcScraper</RootNamespace>
+    <AssemblyName>EdcScraper</AssemblyName>
+    <Version>1.0.0</Version>
+    <Description>HTTP client library for the EDC CR portal — login, schedule CSV exports, and download reports.</Description>
+    <Authors>EdcScraper</Authors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

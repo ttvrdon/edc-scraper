@@ -1,0 +1,13 @@
+# Build outputs
+bin/
+obj/
+
+# Downloaded CSVs from smoke tests
+*.csv
+
+# Rider / VS / VSCode
+.idea/
+.vs/
+*.user
+*.suo
+.vscode/
