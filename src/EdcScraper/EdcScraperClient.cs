@@ -280,8 +280,8 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
                 var timeFrom = TimeSpan.ParseExact(fields[1].Trim(), "hh\\:mm", czechCulture);
                 var timeTo = TimeSpan.ParseExact(fields[2].Trim(), "hh\\:mm", czechCulture);
 
-                // Parse EAN values
-                var eanValues = new Dictionary<string, (decimal In, decimal Out)>();
+                // Accumulate raw IN/OUT values per CSV key (EAN + suffix)
+                var eanRaw = new Dictionary<string, (decimal In, decimal Out)>();
                 foreach (var (colIndex, (ean, isInput)) in eanColumnMap)
                 {
                     if (colIndex >= fields.Length)
@@ -290,11 +290,19 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
                     var valueStr = fields[colIndex].Trim();
                     var value = decimal.Parse(valueStr, czechCulture);
 
-                    if (!eanValues.ContainsKey(ean))
-                        eanValues[ean] = (0, 0);
+                    if (!eanRaw.ContainsKey(ean))
+                        eanRaw[ean] = (0, 0);
 
-                    var (inVal, outVal) = eanValues[ean];
-                    eanValues[ean] = isInput ? (value, outVal) : (inVal, value);
+                    var (inVal, outVal) = eanRaw[ean];
+                    eanRaw[ean] = isInput ? (value, outVal) : (inVal, value);
+                }
+
+                // Project into semantic per-EAN data keyed by the bare EAN identifier
+                var eanValues = new Dictionary<string, EanEnergyData>();
+                foreach (var (rawKey, (inVal, outVal)) in eanRaw)
+                {
+                    var data = EanEnergyData.FromRaw(rawKey, inVal, outVal);
+                    eanValues[data.Ean] = data;
                 }
 
                 records.Add(new EnergyDataRecord

@@ -1,3 +1,6 @@
+using EdcScraper;
+using EdcScraper.Models;
+
 namespace EdcScraper.Tests;
 
 public class CsvParsingTests
@@ -20,19 +23,24 @@ public class CsvParsingTests
 
         // Assert
         Assert.Equal(2, records.Count);
-        
+
         // First record
         Assert.Equal(new DateTime(2026, 8, 7), records[0].Date);
         Assert.Equal(TimeSpan.FromMinutes(0), records[0].TimeFrom);
         Assert.Equal(TimeSpan.FromMinutes(15), records[0].TimeTo);
         Assert.Single(records[0].Eans);
-        Assert.Equal((0.5m, 0.0m), records[0].Eans["859182400221784180-D"]);
+        var first = records[0].Eans["859182400221784180"];
+        Assert.Equal(0.5m, first.In);
+        Assert.Equal(0.0m, first.Out);
+        Assert.Equal(EanKind.Production, first.Kind);
 
         // Second record
         Assert.Equal(new DateTime(2026, 8, 7), records[1].Date);
         Assert.Equal(TimeSpan.FromMinutes(15), records[1].TimeFrom);
         Assert.Equal(TimeSpan.FromMinutes(30), records[1].TimeTo);
-        Assert.Equal((1.25m, -0.5m), records[1].Eans["859182400221784180-D"]);
+        var second = records[1].Eans["859182400221784180"];
+        Assert.Equal(1.25m, second.In);
+        Assert.Equal(-0.5m, second.Out);
     }
 
     /// <summary>
@@ -55,13 +63,124 @@ public class CsvParsingTests
         Assert.Equal(2, records.Count);
         Assert.Equal(3, records[0].Eans.Count);
 
-        // Check first record, first EAN
-        Assert.Equal((0.0m, 0.0m), records[0].Eans["859182400221784180-D"]);
-        Assert.Equal((0.0m, 0.0m), records[0].Eans["859182400204460056-O"]);
-        Assert.Equal((-0.02m, -0.02m), records[0].Eans["859182400611332328-O"]);
+        // Check kinds are derived from suffixes
+        Assert.Equal(EanKind.Production, records[0].Eans["859182400221784180"].Kind);
+        Assert.Equal(EanKind.Consumption, records[0].Eans["859182400204460056"].Kind);
+        Assert.Equal(EanKind.Consumption, records[0].Eans["859182400611332328"].Kind);
+
+        // Check first record values
+        Assert.Equal(0.0m, records[0].Eans["859182400221784180"].In);
+        Assert.Equal(-0.02m, records[0].Eans["859182400611332328"].In);
+        Assert.Equal(-0.02m, records[0].Eans["859182400611332328"].Out);
 
         // Check second record, second EAN
-        Assert.Equal((-0.01m, -0.01m), records[1].Eans["859182400204460056-O"]);
+        Assert.Equal(-0.01m, records[1].Eans["859182400204460056"].In);
+        Assert.Equal(-0.01m, records[1].Eans["859182400204460056"].Out);
+    }
+
+    /// <summary>
+    /// Production shared = IN - OUT (energy offered to the group).
+    /// </summary>
+    [Fact]
+    public void ParseEnergyDataCsv_ProductionShared_IsInMinusOut()
+    {
+        // Arrange
+        var csv = """
+            Datum;Cas od;Cas do;IN-EANP-D;OUT-EANP-D
+            07.08.2026;00:00;00:15;5,0;1,5
+            """;
+
+        // Act
+        var record = EdcScraperClient.ParseEnergyDataCsv(csv)[0];
+        var meter = record.Eans["EANP"];
+
+        // Assert
+        Assert.Equal(EanKind.Production, meter.Kind);
+        Assert.Equal(5.0m, meter.In);
+        Assert.Equal(1.5m, meter.Out);
+        Assert.Equal(3.5m, meter.Shared); // 5.0 - 1.5
+
+        Assert.Equal(5.0m, record.TotalProducedToGrid);
+        Assert.Equal(1.5m, record.TotalSoldToProvider);
+        Assert.Equal(3.5m, record.TotalSharedProduction);
+    }
+
+    /// <summary>
+    /// Consumption shared = IN - OUT (energy received from the group).
+    /// </summary>
+    [Fact]
+    public void ParseEnergyDataCsv_ConsumptionShared_IsInMinusOut()
+    {
+        // Arrange
+        var csv = """
+            Datum;Cas od;Cas do;IN-EANC-O;OUT-EANC-O
+            07.08.2026;00:00;00:15;-4,0;-1,0
+            """;
+
+        // Act
+        var record = EdcScraperClient.ParseEnergyDataCsv(csv)[0];
+        var meter = record.Eans["EANC"];
+
+        // Assert
+        Assert.Equal(EanKind.Consumption, meter.Kind);
+        Assert.Equal(-4.0m, meter.In);
+        Assert.Equal(-1.0m, meter.Out);
+        Assert.Equal(-3.0m, meter.Shared); // -4.0 - (-1.0)
+
+        Assert.Equal(-4.0m, record.TotalConsumedFromGrid);
+        Assert.Equal(-1.0m, record.TotalTakenFromGrid);
+        Assert.Equal(-3.0m, record.TotalSharedConsumption);
+    }
+
+    /// <summary>
+    /// Aggregates should sum across all EANs of the matching kind and ignore the other kind.
+    /// </summary>
+    [Fact]
+    public void ParseEnergyDataCsv_Aggregates_SumPerKind()
+    {
+        // Arrange
+        var csv = """
+            Datum;Cas od;Cas do;IN-P1-D;OUT-P1-D;IN-P2-D;OUT-P2-D;IN-C1-O;OUT-C1-O
+            07.08.2026;00:00;00:15;3,0;1,0;2,0;0,5;-6,0;-2,0
+            """;
+
+        // Act
+        var record = EdcScraperClient.ParseEnergyDataCsv(csv)[0];
+
+        // Assert
+        Assert.Equal(2, record.Production.Count());
+        Assert.Single(record.Consumption);
+
+        Assert.Equal(5.0m, record.TotalProducedToGrid);   // 3.0 + 2.0
+        Assert.Equal(1.5m, record.TotalSoldToProvider);   // 1.0 + 0.5
+        Assert.Equal(3.5m, record.TotalSharedProduction); // 2.0 + 1.5
+
+        Assert.Equal(-6.0m, record.TotalConsumedFromGrid);
+        Assert.Equal(-2.0m, record.TotalTakenFromGrid);
+        Assert.Equal(-4.0m, record.TotalSharedConsumption);
+    }
+
+    /// <summary>
+    /// A column with no recognizable suffix should be classified as Unknown.
+    /// </summary>
+    [Fact]
+    public void ParseEnergyDataCsv_UnknownSuffix_IsUnknownKind()
+    {
+        // Arrange
+        var csv = """
+            Datum;Cas od;Cas do;IN-PLAINEAN;OUT-PLAINEAN
+            07.08.2026;00:00;00:15;1,0;0,25
+            """;
+
+        // Act
+        var record = EdcScraperClient.ParseEnergyDataCsv(csv)[0];
+        var meter = record.Eans["PLAINEAN"];
+
+        // Assert
+        Assert.Equal(EanKind.Unknown, meter.Kind);
+        Assert.Null(meter.Suffix);
+        Assert.Empty(record.Production);
+        Assert.Empty(record.Consumption);
     }
 
     /// <summary>
@@ -120,8 +239,8 @@ public class CsvParsingTests
 
         // Assert
         Assert.Single(records);
-        Assert.Equal(123.456m, records[0].Eans["859182400221784180-D"].In);
-        Assert.Equal(-78.901m, records[0].Eans["859182400221784180-D"].Out);
+        Assert.Equal(123.456m, records[0].Eans["859182400221784180"].In);
+        Assert.Equal(-78.901m, records[0].Eans["859182400221784180"].Out);
     }
 
     /// <summary>
@@ -286,7 +405,9 @@ public class CsvParsingTests
 
         // Assert
         Assert.Single(records);
-        Assert.Equal((-1.5m, -0.25m), records[0].Eans["859182400221784180-D"]);
+        var meter = records[0].Eans["859182400221784180"];
+        Assert.Equal(-1.5m, meter.In);
+        Assert.Equal(-0.25m, meter.Out);
     }
 
     /// <summary>
@@ -306,7 +427,10 @@ public class CsvParsingTests
 
         // Assert
         Assert.Single(records);
-        Assert.Equal((0.0m, 0.0m), records[0].Eans["859182400221784180-D"]);
+        var meter = records[0].Eans["859182400221784180"];
+        Assert.Equal(0.0m, meter.In);
+        Assert.Equal(0.0m, meter.Out);
+        Assert.Equal(0.0m, meter.Shared);
     }
 
     /// <summary>
@@ -327,9 +451,12 @@ public class CsvParsingTests
         // Assert
         Assert.Single(records);
         Assert.Equal(5, records[0].Eans.Count);
-        Assert.Equal((1.1m, 1.2m), records[0].Eans["EAN1-D"]);
-        Assert.Equal((2.1m, 2.2m), records[0].Eans["EAN2-O"]);
-        Assert.Equal((5.1m, 5.2m), records[0].Eans["EAN5-D"]);
+        Assert.Equal(1.1m, records[0].Eans["EAN1"].In);
+        Assert.Equal(1.2m, records[0].Eans["EAN1"].Out);
+        Assert.Equal(2.1m, records[0].Eans["EAN2"].In);
+        Assert.Equal(2.2m, records[0].Eans["EAN2"].Out);
+        Assert.Equal(5.1m, records[0].Eans["EAN5"].In);
+        Assert.Equal(5.2m, records[0].Eans["EAN5"].Out);
     }
 
     /// <summary>
@@ -366,6 +493,8 @@ public class CsvParsingTests
         // Assert
         Assert.Single(records);
         Assert.Equal(new DateTime(2026, 8, 7), records[0].Date);
-        Assert.Equal((0.5m, 0.0m), records[0].Eans["859182400221784180-D"]);
+        var meter = records[0].Eans["859182400221784180"];
+        Assert.Equal(0.5m, meter.In);
+        Assert.Equal(0.0m, meter.Out);
     }
 }
