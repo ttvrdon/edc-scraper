@@ -7,6 +7,13 @@ A C# HTTP client library for the [EDC CR portal](https://portal.edc-cr.cz) that 
 - **Poll** until the export is ready
 - **Download** the resulting CSV file
 
+## Repository layout
+
+- [.NET library (`src/`, `tests/`, `samples/`)](C:/Projects/Personal/edc-scraper.worktrees/update-energydatarecord-calculations/src/)
+- [Home Assistant integration (`homeassistant/`)](C:/Projects/Personal/edc-scraper.worktrees/update-energydatarecord-calculations/homeassistant/)
+
+The Home Assistant/HACS files are intentionally isolated under [homeassistant/](C:/Projects/Personal/edc-scraper.worktrees/update-energydatarecord-calculations/homeassistant/) so the C# and Python parts do not mix at the repository root.
+
 ## Requirements
 
 - .NET 10+

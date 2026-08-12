@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EDC Sdílení energie",
+        "description": "Připojte se k portálu EDC ČR a importujte data své skupiny sdílení.",
+        "data": {
+          "email": "E-mail",
+          "password": "Heslo",
+          "sharing_group_id": "ID skupiny sdílení"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Neplatný e-mail nebo heslo.",
+      "cannot_connect": "Nelze se připojit k portálu EDC."
+    },
+    "abort": {
+      "already_configured": "Tato skupina sdílení je již nakonfigurovaná."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nastavení EDC Sdílení energie",
+        "description": "Čas denního spuštění se vyhodnocuje v časové zóně Europe/Prague. Přátelské názvy zadejte po řádcích ve formátu „EAN: Název“.",
+        "data": {
+          "run_time": "Denní čas spuštění (HH:MM, Europe/Prague)",
+          "max_backfill_days": "Maximální počet dní pro zpětné doplnění (max 30)",
+          "names": "Přátelské názvy EAN"
+        }
+      }
+    }
+  },
+  "services": {
+    "import_now": {
+      "name": "Importovat nyní",
+      "description": "Načte chybějící dny z portálu EDC a importuje je do statistik."
+    }
+  }
+}
