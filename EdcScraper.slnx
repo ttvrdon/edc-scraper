@@ -5,4 +5,7 @@
   <Folder Name="/src/">
     <Project Path="src/EdcScraper/EdcScraper.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EdcScraper.Tests/EdcScraper.Tests.csproj" />
+  </Folder>
 </Solution>

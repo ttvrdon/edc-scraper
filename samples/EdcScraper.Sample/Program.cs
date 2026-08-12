@@ -1,65 +1,53 @@
 using EdcScraper;
 using EdcScraper.Models;
+using EdcScraper.Sample.Configuration;
 
-var email    = Environment.GetEnvironmentVariable("EDC_EMAIL")    ?? "EMAIL_ENV_VAR";
-var password = Environment.GetEnvironmentVariable("EDC_PASSWORD") ?? "PASSWORD_ENV_VAR";
+var builder = Host.CreateApplicationBuilder(args);
+
+var settings = builder.Configuration.GetSection(Settings.SectionName).Get<Settings>() ?? new Settings();
+
+var email    = settings.Username;
+var password = settings.Password;
+
+// Resolve the export date range. If not configured, default to yesterday.
+var yesterday = DateTime.Today.AddDays(-1);
+var dateFrom  = settings.DateFrom ?? yesterday;
+var dateTo    = settings.DateTo   ?? yesterday;
 
 await using var client = new EdcScraperClient();
 
 try
 {
-    Console.WriteLine("Testing EdcScraper library...\n");
+    Console.WriteLine("EdcScraper sample\n");
 
-    // Login
+    // 1. Login
     Console.WriteLine("1. Logging in…");
     await client.LoginAsync(email, password);
     Console.WriteLine("   ✓ Login successful\n");
 
-    // List reports
-    Console.WriteLine("2. Listing existing reports…");
-    var list = await client.ListReportsAsync();
-    Console.WriteLine($"   ✓ Found {list.Content.Length} reports");
-    var generatedReports = list.Content.Where(r => r.ReportState == "GENERATED").ToList();
-    Console.WriteLine($"   ✓ {generatedReports.Count} are GENERATED\n");
-
-    // Download and parse CSV
-    if (generatedReports.Count > 0)
-    {
-        Console.WriteLine("3. Downloading and parsing CSV…");
-        var report = generatedReports.First();
-        var csv = await client.DownloadReportAsync(report.Id);
-        var csvText = System.Text.Encoding.UTF8.GetString(csv);
-
-        var records = EdcScraperClient.ParseEnergyDataCsv(csvText);
-        Console.WriteLine($"   ✓ Parsed {records.Count} energy data records\n");
-
-        // Show sample records
-        Console.WriteLine("   Sample records:");
-        foreach (var record in records.Take(3))
-        {
-            Console.WriteLine($"     {record.Date:dd.MM.yyyy} {record.TimeFrom:hh\\:mm}-{record.TimeTo:hh\\:mm}");
-            foreach (var (ean, (inVal, outVal)) in record.Eans.Take(2))
-            {
-                Console.WriteLine($"       {ean}: IN={inVal,8:F2}, OUT={outVal,8:F2}");
-            }
-        }
-    }
-
-    // Test WaitAndParseAsync
-    Console.WriteLine("\n4. Creating a new export and waiting for it…");
+    // 2. Request a new export for the configured (or default) date range
+    Console.WriteLine($"2. Requesting a new report for {dateFrom:dd.MM.yyyy}–{dateTo:dd.MM.yyyy} " +
+                      $"(sharing group {settings.SharingGroupId})…");
     var export = await client.CreateExportAsync(
         ExportRequest.BySharingGroup(
-            sharingGroupId: 36557,
-            dateFrom: DateTime.Today.AddDays(-3),
-            dateTo:   DateTime.Today,
+            sharingGroupId: settings.SharingGroupId,
+            dateFrom: dateFrom,
+            dateTo:   dateTo,
             viewType: ViewType.Daily));
     Console.WriteLine($"   ✓ Export scheduled: ID={export.Id}\n");
 
-    Console.WriteLine("   Polling for completion (max 10 min)…");
-    var energyRecords = await client.WaitAndParseAsync(export.Id);
-    Console.WriteLine($"   ✓ Got {energyRecords.Count} energy records from parsed CSV\n");
+    // 3. Wait for the report to be generated and download the CSV
+    Console.WriteLine("3. Waiting for the report to be generated (max 10 min)…");
+    var csvBytes = await client.WaitAndDownloadAsync(export.Id);
 
-    Console.WriteLine("5. Test complete! ✓\n");
+    var outputPath = Path.Combine(
+        AppContext.BaseDirectory,
+        $"export_{dateFrom:yyyyMMdd}_{dateTo:yyyyMMdd}_{export.Id}.csv");
+    await File.WriteAllBytesAsync(outputPath, csvBytes);
+    Console.WriteLine($"   ✓ Downloaded {csvBytes.Length:N0} bytes");
+    Console.WriteLine($"   ✓ Saved CSV to: {outputPath}\n");
+
+    Console.WriteLine("4. Done! ✓\n");
 }
 catch (Exception ex)
 {
@@ -69,9 +57,5 @@ catch (Exception ex)
 }
 finally
 {
-    Console.WriteLine("6. Logging out…");
+    Console.WriteLine("Logging out…");
 }
-
-
-
-

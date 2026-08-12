@@ -1,6 +1,3 @@
-using EdcScraper;
-using EdcScraper.Models;
-
 namespace EdcScraper.Tests;
 
 public class CsvParsingTests
