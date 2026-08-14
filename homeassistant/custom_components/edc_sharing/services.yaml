@@ -1,5 +1,0 @@
-import_now:
-  name: Import now
-  description: >-
-    Immediately fetch any missing days from the EDC portal and import them into
-    Home Assistant statistics (respects the 30-day EDC limit).
