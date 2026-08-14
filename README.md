@@ -9,10 +9,11 @@ A C# HTTP client library for the [EDC CR portal](https://portal.edc-cr.cz) that 
 
 ## Repository layout
 
-- [.NET library (`src/`, `tests/`, `samples/`)](C:/Projects/Personal/edc-scraper.worktrees/update-energydatarecord-calculations/src/)
-- [Home Assistant integration (`homeassistant/`)](C:/Projects/Personal/edc-scraper.worktrees/update-energydatarecord-calculations/homeassistant/)
+- `src/` — the EdcScraper library
+- `tests/` — unit tests
+- `samples/` — usage examples
 
-The Home Assistant/HACS files are intentionally isolated under [homeassistant/](C:/Projects/Personal/edc-scraper.worktrees/update-energydatarecord-calculations/homeassistant/) so the C# and Python parts do not mix at the repository root.
+> **Home Assistant / HACS integration** has been moved to its own repository: [ttvrdon/edc-scraper-ha](https://github.com/ttvrdon/edc-scraper-ha)
 
 ## Requirements
 
