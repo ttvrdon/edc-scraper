@@ -11,3 +11,6 @@ obj/
 *.user
 *.suo
 .vscode/
+
+# Development appsettings
+**/appsettings.*.json

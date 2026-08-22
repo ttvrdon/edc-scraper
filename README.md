@@ -9,11 +9,8 @@ A C# HTTP client library for the [EDC CR portal](https://portal.edc-cr.cz) that 
 
 ## Repository layout
 
-- `src/` — the EdcScraper library
+- `src/` — the EdcScraper library + worker
 - `tests/` — unit tests
-- `samples/` — usage examples
-
-> **Home Assistant / HACS integration** has been moved to its own repository: [ttvrdon/edc-scraper-ha](https://github.com/ttvrdon/edc-scraper-ha)
 
 ## Requirements
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -48,6 +49,8 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
 {
     private const string ApiBaseUrl = "https://api.portal.edc-cr.cz/api/v0";
     private const string ContractType = "STANDARD";
+
+    private static readonly CultureInfo CzechCulture = CultureInfo.GetCultureInfo("cs-CZ");
 
     private readonly HttpClient _apiHttpClient;
     private readonly AuthService _authService;
@@ -228,7 +231,7 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
         if (string.IsNullOrWhiteSpace(csvContent))
             return records.AsReadOnly();
 
-        var lines = csvContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var lines = csvContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
 
         if (lines.Length < 1)
             return records.AsReadOnly();
@@ -263,8 +266,6 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
         }
 
         // Parse data rows
-        var czechCulture = System.Globalization.CultureInfo.GetCultureInfo("cs-CZ");
-        
         foreach (var line in lines.Skip(1))
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -276,9 +277,9 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
 
             try
             {
-                var date = DateTime.ParseExact(fields[0].Trim(), "dd.MM.yyyy", czechCulture);
-                var timeFrom = TimeSpan.ParseExact(fields[1].Trim(), "hh\\:mm", czechCulture);
-                var timeTo = TimeSpan.ParseExact(fields[2].Trim(), "hh\\:mm", czechCulture);
+                var date = DateTime.ParseExact(fields[0].Trim(), "dd.MM.yyyy", CzechCulture);
+                var timeFrom = TimeSpan.ParseExact(fields[1].Trim(), "hh\\:mm", CzechCulture);
+                var timeTo = TimeSpan.ParseExact(fields[2].Trim(), "hh\\:mm", CzechCulture);
 
                 // Accumulate raw IN/OUT values per CSV key (EAN + suffix)
                 var eanRaw = new Dictionary<string, (decimal In, decimal Out)>();
@@ -288,7 +289,12 @@ public sealed class EdcScraperClient : IAsyncDisposable, IDisposable
                         continue;
 
                     var valueStr = fields[colIndex].Trim();
-                    var value = decimal.Parse(valueStr, czechCulture);
+                    decimal value = 0;
+                    if (!string.IsNullOrEmpty(valueStr))
+                    {
+                        if (decimal.TryParse(valueStr, NumberStyles.Number, CzechCulture, out var parsedValue))
+                            value = parsedValue;
+                    }
 
                     if (!eanRaw.ContainsKey(ean))
                         eanRaw[ean] = (0, 0);

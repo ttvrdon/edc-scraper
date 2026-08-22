@@ -73,8 +73,8 @@ public sealed record EanEnergyData
             Ean = ean,
             Suffix = suffix,
             Kind = KindFromSuffix(suffix),
-            In = @in,
-            Out = @out,
+            In = Math.Abs(@in),
+            Out = Math.Abs(@out),
         };
     }
 
