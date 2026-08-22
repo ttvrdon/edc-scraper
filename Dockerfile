@@ -5,6 +5,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy only what the worker needs to restore/build
+COPY Directory.Packages.props ./
 COPY src/EdcScraper/EdcScraper.csproj src/EdcScraper/
 COPY src/EdcScraper.Worker/EdcScraper.Worker.csproj src/EdcScraper.Worker/
 RUN dotnet restore src/EdcScraper.Worker/EdcScraper.Worker.csproj
