@@ -14,21 +14,24 @@ namespace EdcScraper.Worker.Services;
 public sealed class ScraperJob : BackgroundService
 {
     private readonly ScraperDatabase _database;
-    private readonly EdcOptions _edc;
-    private readonly FetchOptions _fetch;
+    private readonly EdcOptions _edcOptions;
+    private readonly FetchOptions _fetchOptions;
+    private readonly DatabaseOptions _databaseOptions;
     private readonly ILogger<ScraperJob> _logger;
     private readonly IHostApplicationLifetime _lifetime;
 
     public ScraperJob(
         ScraperDatabase database,
-        IOptions<EdcOptions> edc,
-        IOptions<FetchOptions> fetch,
+        IOptions<EdcOptions> edcOptions,
+        IOptions<FetchOptions> fetchOptions,
+        IOptions<DatabaseOptions> databaseOptions,
         ILogger<ScraperJob> logger,
         IHostApplicationLifetime lifetime)
     {
         _database = database;
-        _edc = edc.Value;
-        _fetch = fetch.Value;
+        _edcOptions = edcOptions.Value;
+        _fetchOptions = fetchOptions.Value;
+        _databaseOptions = databaseOptions.Value;
         _logger = logger;
         _lifetime = lifetime;
     }
@@ -58,20 +61,21 @@ public sealed class ScraperJob : BackgroundService
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_edc.Username) || string.IsNullOrWhiteSpace(_edc.Password))
+        if (string.IsNullOrWhiteSpace(_edcOptions.Username) || string.IsNullOrWhiteSpace(_edcOptions.Password))
             throw new InvalidOperationException("Edc:Username and Edc:Password must be configured.");
-        if (_edc.SharingGroupId <= 0)
+        if (_edcOptions.SharingGroupId <= 0)
             throw new InvalidOperationException("Edc:SharingGroupId must be configured.");
 
+        _logger.LogInformation("Initializing DB at path: {Path}", _databaseOptions.Path);
         await _database.InitializeAsync(cancellationToken);
 
-        var lastDay = _fetch.LookbackFromDate ?? DateTime.Today.AddDays(-1);
+        var lastDay = _fetchOptions.LookbackFromDate ?? DateTime.Today.AddDays(-1);
         var earliestAllowed = lastDay.AddDays(-(FetchOptions.MaxLookbackDays - 1));
         DateTime firstDay;
 
-        if (_fetch.LookbackDays.HasValue)
+        if (_fetchOptions.LookbackDays.HasValue)
         {
-            var lookback = Math.Clamp(_fetch.LookbackDays ?? 1, 1, FetchOptions.MaxLookbackDays);
+            var lookback = Math.Clamp(_fetchOptions.LookbackDays ?? 1, 1, FetchOptions.MaxLookbackDays);
 
             firstDay = lastDay.AddDays(-(lookback - 1));
             _logger.LogInformation(
@@ -79,7 +83,7 @@ public sealed class ScraperJob : BackgroundService
         }
         else
         {
-            var lastFetched = await _database.GetLastFetchedDateAsync(_edc.SharingGroupId, cancellationToken);
+            var lastFetched = await _database.GetLastFetchedDateAsync(_edcOptions.SharingGroupId, cancellationToken);
             if (lastFetched is null)
             {
                 firstDay = earliestAllowed;
@@ -108,12 +112,12 @@ public sealed class ScraperJob : BackgroundService
         var dayCount = (lastDay - firstDay).Days + 1;
         _logger.LogInformation(
             "Starting scrape for sharing group {Group}, {Days} day(s): {From:yyyy-MM-dd}..{To:yyyy-MM-dd}",
-            _edc.SharingGroupId, dayCount, firstDay, lastDay);
+            _edcOptions.SharingGroupId, dayCount, firstDay, lastDay);
 
         await using var client = new EdcScraperClient();
 
-        _logger.LogInformation("Logging in as {User}…", _edc.Username);
-        await client.LoginAsync(_edc.Username, _edc.Password, cancellationToken);
+        _logger.LogInformation("Logging in as {User}…", _edcOptions.Username);
+        await client.LoginAsync(_edcOptions.Username, _edcOptions.Password, cancellationToken);
 
         await RequestAndProcessDataAsync(client, firstDay, lastDay, cancellationToken);
 
@@ -128,7 +132,7 @@ public sealed class ScraperJob : BackgroundService
 
         var export = await client.CreateExportAsync(
             ExportRequest.BySharingGroup(
-                sharingGroupId: _edc.SharingGroupId,
+                sharingGroupId: _edcOptions.SharingGroupId,
                 dateFrom: from,
                 dateTo: to,
                 viewType: ViewType.Daily),
@@ -165,7 +169,7 @@ public sealed class ScraperJob : BackgroundService
         await _database.UpsertFetchStateAsync(
             new FetchStateRow
             {
-                SharingGroupId = _edc.SharingGroupId,
+                SharingGroupId = _edcOptions.SharingGroupId,
                 LastFetchedDate = records.Max(r => r.Date),
                 LastFetchedAt = fetchedAt,
             },
@@ -181,7 +185,7 @@ public sealed class ScraperJob : BackgroundService
             {
                 rows.Add(new EnergyIntervalRow
                 {
-                    SharingGroupId = _edc.SharingGroupId,
+                    SharingGroupId = _edcOptions.SharingGroupId,
                     Date = record.Date,
                     TimeFrom = record.TimeFrom,
                     TimeTo = record.TimeTo,
@@ -206,7 +210,7 @@ public sealed class ScraperJob : BackgroundService
         DateTime fetchedAt) =>
         new()
         {
-            SharingGroupId = _edc.SharingGroupId,
+            SharingGroupId = _edcOptions.SharingGroupId,
             Date = day,
             TotalProducedToGrid = records.Sum(r => r.TotalProducedToGrid),
             TotalSoldToProvider = records.Sum(r => r.TotalSoldToProvider),
